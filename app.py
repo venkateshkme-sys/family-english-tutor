@@ -1,6 +1,5 @@
 import streamlit as st
 from audio_recorder_streamlit import audio_recorder
-import requests
 from groq import Groq
 import edge_tts
 import asyncio
@@ -9,41 +8,42 @@ import os
 # --- 1. பாதுகாப்பான API Keys செட்டப் (Streamlit Secrets) ---
 try:
     GROQ_API_KEY = st.secrets["YOUR_GROQ_KEY"]
-    HF_TOKEN = st.secrets["YOUR_HF_TOKEN"]
 except Exception:
     GROQ_API_KEY = "gsk_local_testing_only"
-    HF_TOKEN = "hf_local_testing_only"
 
+# Groq கிளையண்ட் - இது மட்டுமே இப்போது STT மற்றும் LLM இரண்டிற்கும் போதுமானது!
 groq_client = Groq(api_key=GROQ_API_KEY)
-HF_STT_URL = "https://huggingface.co"
 
 # --- வெப்சைட் வடிவமைப்பு (UI Layout) ---
 st.set_page_config(page_title="Family English Tutor", page_icon="🎙️")
 st.title("🎙️ குடும்ப ஆங்கில ஆசிரியர் (Miss Nova)")
 st.write("✨ **வழிமுறை:** கீழே உள்ள மைக் பட்டனை அழுத்தி தமிழில் அல்லது ஆங்கிலத்தில் பேசுங்கள். பேசி முடித்ததும் மீண்டும் அதே பட்டனை அழுத்தி நிறுத்தவும். AI உங்களுக்குப் பதிலளிக்கும்!")
 
-# --- 2. பேச்சை உரையாக மாற்றும் செயல்பாடு (STT) ---
+# --- 2. Groq மூலம் பேச்சை மிக அதிவேகமாக உரையாக மாற்றும் செயல்பாடு (STT) ---
 def speech_to_text(audio_bytes):
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    params = {"task": "translate", "language": "ta"} 
-    
-    # 💡 முக்கிய திருத்தம்: மொபைல் ஆடியோவை ஒரு தற்காலிக ஃபைலாகச் சேமித்து அனுப்புதல்
     temp_filename = "temp_recording.wav"
     with open(temp_filename, "wb") as f:
         f.write(audio_bytes)
         
-    with open(temp_filename, "rb") as audio_file:
-        audio_data = audio_file.read()
+    try:
+        # 🚀 ஹக்கிங் ஃபேஸ்-க்கு பதிலாக Groq-இன் அதிவேக Whisper மாடலைப் பயன்படுத்துகிறோம்
+        with open(temp_filename, "rb") as audio_file:
+            transcription = groq_client.audio.transcriptions.create(
+                file=(temp_filename, audio_file.read()),
+                model="whisper-large-v3", # உலகத்தரம் வாய்ந்த STT மாடல்
+                response_format="json",
+                language="ta" # தமிழ் மற்றும் ஆங்கிலக் கலவையைப் புரிந்துகொள்ளும்
+            )
+        transcribed_text = transcription.text
+    except Exception as e:
+        st.error(f"STT Error: {e}")
+        transcribed_text = None
         
-    response = requests.post(HF_STT_URL, headers=headers, data=audio_data, params=params)
-    
     # தற்காலிக ஃபைலை நீக்குதல்
     if os.path.exists(temp_filename):
         os.remove(temp_filename)
         
-    if response.status_code == 200:
-        return response.json().get("text", "")
-    return None
+    return transcribed_text
 
 # --- 3. AI ஆசிரியர் பதில் தயாரிக்கும் செயல்பாடு (LLM) ---
 def chat_with_tutor(user_text):
@@ -80,7 +80,7 @@ if audio_bytes:
     if transcribed_text:
         st.success(f"🗣️ நீங்கள் பேசியது: {transcribed_text}")
         
-        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கிறது..."):
+        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கும் செயல்பாடு..."):
             ai_reply = chat_with_tutor(transcribed_text)
             output_audio_file = "reply.mp3"
             asyncio.run(text_to_speech(ai_reply, output_audio_file))
