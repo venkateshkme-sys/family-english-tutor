@@ -42,7 +42,6 @@ if "current_topic" not in st.session_state or st.session_state.current_topic != 
         )},
         {"role": "assistant", "content": initial_prompts[topic]}
     ]
-    st.session_state.first_run = True
 
 # --- 2. Groq மூலம் பேச்சை ஆங்கில உரையாக மாற்றும் செயல்பாடு (STT) ---
 def speech_to_text(audio_bytes):
@@ -70,7 +69,6 @@ def speech_to_text(audio_bytes):
 # --- 3. AI ஆசிரியர் உரையாடலைத் தொடரும் செயல்பாடு (LLM) ---
 def get_tutor_response():
     completion = groq_client.chat.completions.create(
-        # 🚀 100% பக்கா தீர்வு: எப்போதும் இலவசப் பட்டியலில் இருக்கும் நிலையான மாடலை மாற்றியுள்ளோம்
         model="llama3-8b-8192", 
         messages=st.session_state.messages
     )
@@ -90,12 +88,6 @@ for msg in st.session_state.messages:
     elif msg["role"] == "assistant":
         st.chat_message("assistant").write(msg["content"])
 
-if st.session_state.first_run:
-    initial_audio = "initial.mp3"
-    asyncio.run(text_to_speech(st.session_state.messages["content"], initial_audio))
-    st.audio(initial_audio, format="audio/mp3", autoplay=True)
-    st.session_state.first_run = False
-
 # --- வெப்சைட் இயங்கும் முறை ---
 st.write("---")
 audio_bytes = audio_recorder(text="பதிலளிக்க இங்கே க்ளிக் செய்து பேசவும்", recording_color="#e74c3c", neutral_color="#2ecc71")
@@ -112,8 +104,16 @@ if audio_bytes:
             st.session_state.messages.append({"role": "assistant", "content": ai_reply})
             
             output_audio_file = "reply.mp3"
-            asyncio.run(text_to_speech(ai_reply, output_audio_file))
+            # 🚀 முக்கிய திருத்தம்: பழைய TypeError பிழை தரும் வரியை மாற்றி பாதுகாப்பாக இயக்கும் முறை
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(text_to_speech(ai_reply, output_audio_file))
             
         st.rerun()
     else:
         st.error("மன்னிக்கவும், உங்கள் குரல் சரியாகப் புரியவில்லை. மீண்டும் முயற்சிக்கவும்!")
+
+# சமீபத்திய பதிலுக்கான ஆடியோ பிளேயரை மட்டும் கீழே காட்டுதல்
+if os.path.exists("reply.mp3"):
+    st.write("🔊 **Listen to Miss Nova's voice:**")
+    st.audio("reply.mp3", format="audio/mp3")
