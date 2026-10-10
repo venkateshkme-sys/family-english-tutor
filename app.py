@@ -17,14 +17,12 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 st.set_page_config(page_title="Topic English Tutor", page_icon="🎙️")
 st.title("🎙️ தலைப்பு வாரியான ஆங்கில ஆசிரியர் (Miss Nova)")
 
-# --- 🌟 புதிய பகுதி: பக்கவாட்டு மெனுவில் தலைப்பைத் தேர்ந்தெடுத்தல் (Sidebar Topic Selector) ---
 st.sidebar.header("🎯 உரையாடல் தலைப்புகள்")
 topic = st.sidebar.selectbox(
     "உங்களுக்குப் பிடித்த தலைப்பைத் தேர்ந்தெடுக்கவும்:",
     ["Daily Life (தினசரி வாழ்க்கை)", "Job Interview (வேலை நேர்காணல்)", "At a Restaurant (உணவகம்)", "Shopping (அங்காடி)"]
 )
 
-# ஒவ்வொரு தலைப்பிற்கும் தகுந்தவாறு AI கேட்கும் முதல் கேள்வி
 initial_prompts = {
     "Daily Life (தினசரி வாழ்க்கை)": "Hello! Let's talk about daily life. How was your day today, and what did you do from morning?",
     "Job Interview (வேலை நேர்காணல்)": "Welcome to your mock interview. Can you please introduce yourself and tell me about your work experience?",
@@ -32,7 +30,6 @@ initial_prompts = {
     "Shopping (அங்காடி)": "Hi there! Welcome to our clothing store. Are you looking for anything specific today, like shirts or jeans?"
 }
 
-# பயனர் தலைப்பை மாற்றினால் உரையாடலை மீண்டும் முதலிலிருந்து தொடங்க (Reset Session on Topic Change)
 if "current_topic" not in st.session_state or st.session_state.current_topic != topic:
     st.session_state.current_topic = topic
     st.session_state.messages = [
@@ -73,7 +70,8 @@ def speech_to_text(audio_bytes):
 # --- 3. AI ஆசிரியர் உரையாடலைத் தொடரும் செயல்பாடு (LLM) ---
 def get_tutor_response():
     completion = groq_client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        # 🚀 முக்கிய திருத்தம்: நிறுத்தப்பட்ட பழைய மாடலுக்குப் பதிலாக புதிய மாடலை மாற்றியுள்ளோம்
+        model="llama-3.3-70b-specdec", 
         messages=st.session_state.messages
     )
     return completion.choices.message.content
@@ -85,14 +83,13 @@ async def text_to_speech(text_response, output_path):
     communicate = edge_tts.Communicate(clean_text, voice)
     await communicate.save(output_path)
 
-# --- கடந்த கால உரையாடல்களைத் திரையில் காட்டுதல் (Display Chat History) ---
+# --- கடந்த கால உரையாடல்களைத் திரையில் காட்டுதல் ---
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.chat_message("user").write(msg["content"])
     elif msg["role"] == "assistant":
         st.chat_message("assistant").write(msg["content"])
 
-# புதிய தலைப்பைத் தேர்ந்தெடுக்கும்போது AI பேச்சை ஒலிக்க வைக்க
 if st.session_state.first_run:
     initial_audio = "initial.mp3"
     asyncio.run(text_to_speech(st.session_state.messages[1]["content"], initial_audio))
