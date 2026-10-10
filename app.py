@@ -11,53 +11,70 @@ try:
 except Exception:
     GROQ_API_KEY = "gsk_local_testing_only"
 
-# Groq கிளையண்ட் - இது மட்டுமே இப்போது STT மற்றும் LLM இரண்டிற்கும் போதுமானது!
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 # --- வெப்சைட் வடிவமைப்பு (UI Layout) ---
-st.set_page_config(page_title="Family English Tutor", page_icon="🎙️")
-st.title("🎙️ குடும்ப ஆங்கில ஆசிரியர் (Miss Nova)")
-st.write("✨ **வழிமுறை:** கீழே உள்ள மைக் பட்டனை அழுத்தி தமிழில் அல்லது ஆங்கிலத்தில் பேசுங்கள். பேசி முடித்ததும் மீண்டும் அதே பட்டனை அழுத்தி நிறுத்தவும். AI உங்களுக்குப் பதிலளிக்கும்!")
+st.set_page_config(page_title="Topic English Tutor", page_icon="🎙️")
+st.title("🎙️ தலைப்பு வாரியான ஆங்கில ஆசிரியர் (Miss Nova)")
 
-# --- 2. Groq மூலம் பேச்சை மிக அதிவேகமாக உரையாக மாற்றும் செயல்பாடு (STT) ---
+# --- 🌟 புதிய பகுதி: பக்கவாட்டு மெனுவில் தலைப்பைத் தேர்ந்தெடுத்தல் (Sidebar Topic Selector) ---
+st.sidebar.header("🎯 உரையாடல் தலைப்புகள்")
+topic = st.sidebar.selectbox(
+    "உங்களுக்குப் பிடித்த தலைப்பைத் தேர்ந்தெடுக்கவும்:",
+    ["Daily Life (தினசரி வாழ்க்கை)", "Job Interview (வேலை நேர்காணல்)", "At a Restaurant (உணவகம்)", "Shopping (அங்காடி)"]
+)
+
+# ஒவ்வொரு தலைப்பிற்கும் தகுந்தவாறு AI கேட்கும் முதல் கேள்வி
+initial_prompts = {
+    "Daily Life (தினசரி வாழ்க்கை)": "Hello! Let's talk about daily life. How was your day today, and what did you do from morning?",
+    "Job Interview (வேலை நேர்காணல்)": "Welcome to your mock interview. Can you please introduce yourself and tell me about your work experience?",
+    "At a Restaurant (உணவகம்)": "Hello, welcome to our cafe! I am your waiter today. What would you like to order for dinner?",
+    "Shopping (அங்காடி)": "Hi there! Welcome to our clothing store. Are you looking for anything specific today, like shirts or jeans?"
+}
+
+# பயனர் தலைப்பை மாற்றினால் உரையாடலை மீண்டும் முதலிலிருந்து தொடங்க (Reset Session on Topic Change)
+if "current_topic" not in st.session_state or st.session_state.current_topic != topic:
+    st.session_state.current_topic = topic
+    st.session_state.messages = [
+        {"role": "system", "content": (
+            f"You are Miss Nova, a friendly spoken English coach. The selected topic is '{topic}'. "
+            "Your goal is to practice English conversation with the user related to this specific topic. "
+            "Rule 1: Ask only ONE simple question at a time related to the scenario. "
+            "Rule 2: Read the user's answer. If they make a grammar mistake, gently point it out as [Correction: ...], and then ask the NEXT logical question. "
+            "Rule 3: Keep your responses short (1-3 sentences maximum)."
+        )},
+        {"role": "assistant", "content": initial_prompts[topic]}
+    ]
+    st.session_state.first_run = True
+
+# --- 2. Groq மூலம் பேச்சை ஆங்கில உரையாக மாற்றும் செயல்பாடு (STT) ---
 def speech_to_text(audio_bytes):
     temp_filename = "temp_recording.wav"
     with open(temp_filename, "wb") as f:
         f.write(audio_bytes)
         
     try:
-        # 🚀 ஹக்கிங் ஃபேஸ்-க்கு பதிலாக Groq-இன் அதிவேக Whisper மாடலைப் பயன்படுத்துகிறோம்
         with open(temp_filename, "rb") as audio_file:
-            transcription = groq_client.audio.transcriptions.create(
+            translation = groq_client.audio.translations.create(
                 file=(temp_filename, audio_file.read()),
-                model="whisper-large-v3", # உலகத்தரம் வாய்ந்த STT மாடல்
-                response_format="json",
-                language="ta" # தமிழ் மற்றும் ஆங்கிலக் கலவையைப் புரிந்துகொள்ளும்
+                model="whisper-large-v3",
+                response_format="json"
             )
-        transcribed_text = transcription.text
+        transcribed_text = translation.text
     except Exception as e:
         st.error(f"STT Error: {e}")
         transcribed_text = None
         
-    # தற்காலிக ஃபைலை நீக்குதல்
     if os.path.exists(temp_filename):
         os.remove(temp_filename)
         
     return transcribed_text
 
-# --- 3. AI ஆசிரியர் பதில் தயாரிக்கும் செயல்பாடு (LLM) ---
-def chat_with_tutor(user_text):
-    system_prompt = (
-        "You are Miss Nova, a friendly spoken English coach for a family. "
-        "Keep your response strictly to 1 or 2 simple sentences. "
-        "If the user made any grammar mistakes, gently add a correction note at the end labeled as [Correction: ...]."
-    )
+# --- 3. AI ஆசிரியர் உரையாடலைத் தொடரும் செயல்பாடு (LLM) ---
+def get_tutor_response():
     completion = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text}
-        ]
+        messages=st.session_state.messages
     )
     return completion.choices.message.content
 
@@ -68,25 +85,38 @@ async def text_to_speech(text_response, output_path):
     communicate = edge_tts.Communicate(clean_text, voice)
     await communicate.save(output_path)
 
+# --- கடந்த கால உரையாடல்களைத் திரையில் காட்டுதல் (Display Chat History) ---
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.chat_message("user").write(msg["content"])
+    elif msg["role"] == "assistant":
+        st.chat_message("assistant").write(msg["content"])
+
+# புதிய தலைப்பைத் தேர்ந்தெடுக்கும்போது AI பேச்சை ஒலிக்க வைக்க
+if st.session_state.first_run:
+    initial_audio = "initial.mp3"
+    asyncio.run(text_to_speech(st.session_state.messages[1]["content"], initial_audio))
+    st.audio(initial_audio, format="audio/mp3", autoplay=True)
+    st.session_state.first_run = False
+
 # --- வெப்சைட் இயங்கும் முறை ---
-audio_bytes = audio_recorder(text="பேச இங்கே க்ளிக் செய்யவும்", recording_color="#e74c3c", neutral_color="#2ecc71")
+st.write("---")
+audio_bytes = audio_recorder(text="பதிலளிக்க இங்கே க்ளிக் செய்து பேசவும்", recording_color="#e74c3c", neutral_color="#2ecc71")
 
 if audio_bytes:
-    st.audio(audio_bytes, format="audio/wav")
-    
     with st.spinner("🤖 நீங்கள் பேசியதை AI புரிந்துகொள்கிறது..."):
-        transcribed_text = speech_to_text(audio_bytes)
+        user_text = speech_to_text(audio_bytes)
         
-    if transcribed_text:
-        st.success(f"🗣️ நீங்கள் பேசியது: {transcribed_text}")
+    if user_text:
+        st.session_state.messages.append({"role": "user", "content": user_text})
         
-        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கும் செயல்பாடு..."):
-            ai_reply = chat_with_tutor(transcribed_text)
+        with st.spinner("🧠 Miss Nova திருத்தங்கள் மற்றும் அடுத்த கேள்வியைத் தயாரிக்கிறார்..."):
+            ai_reply = get_tutor_response()
+            st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+            
             output_audio_file = "reply.mp3"
             asyncio.run(text_to_speech(ai_reply, output_audio_file))
-        
-        st.markdown(f"### 🤖 Miss Nova-வின் பதில்:")
-        st.info(ai_reply)
-        st.audio(output_audio_file, format="audio/mp3")
+            
+        st.rerun()
     else:
         st.error("மன்னிக்கவும், உங்கள் குரல் சரியாகப் புரியவில்லை. மீண்டும் முயற்சிக்கவும்!")
