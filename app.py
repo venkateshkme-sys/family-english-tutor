@@ -70,8 +70,8 @@ def speech_to_text(audio_bytes):
 # --- 3. AI ஆசிரியர் உரையாடலைத் தொடரும் செயல்பாடு (LLM) ---
 def get_tutor_response():
     completion = groq_client.chat.completions.create(
-        # 🚀 முக்கிய திருத்தம்: நிறுத்தப்பட்ட பழைய மாடலுக்குப் பதிலாக புதிய மாடலை மாற்றியுள்ளோம்
-        model="llama-3.3-70b-specdec", 
+        # 🚀 100% பக்கா தீர்வு: எப்போதும் இலவசப் பட்டியலில் இருக்கும் நிலையான மாடலை மாற்றியுள்ளோம்
+        model="llama3-8b-8192", 
         messages=st.session_state.messages
     )
     return completion.choices.message.content
@@ -92,7 +92,7 @@ for msg in st.session_state.messages:
 
 if st.session_state.first_run:
     initial_audio = "initial.mp3"
-    asyncio.run(text_to_speech(st.session_state.messages[1]["content"], initial_audio))
+    asyncio.run(text_to_speech(st.session_state.messages["content"], initial_audio))
     st.audio(initial_audio, format="audio/mp3", autoplay=True)
     st.session_state.first_run = False
 
