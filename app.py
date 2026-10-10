@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_audio_recorder import audio_recorder
+from audio_recorder_streamlit import audio_recorder
 import requests
 from groq import Groq
 import edge_tts
@@ -55,6 +55,7 @@ async def text_to_speech(text_response, output_path):
     await communicate.save(output_path)
 
 # --- வெப்சைட் இயங்கும் முறை ---
+# புதிய மேம்படுத்தப்பட்ட மைக் ரெக்கார்டர்
 audio_bytes = audio_recorder(text="பேச இங்கே க்ளிக் செய்யவும்", recording_color="#e74c3c", neutral_color="#2ecc71")
 
 if audio_bytes:
@@ -66,7 +67,7 @@ if audio_bytes:
     if transcribed_text:
         st.success(f"🗣️ நீங்கள் பேசியது: {transcribed_text}")
         
-        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கிறது..."):
+        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கும் செயல்பாடு..."):
             ai_reply = chat_with_tutor(transcribed_text)
             output_audio_file = "reply.mp3"
             asyncio.run(text_to_speech(ai_reply, output_audio_file))
