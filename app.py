@@ -26,7 +26,21 @@ st.write("✨ **வழிமுறை:** கீழே உள்ள மைக் 
 def speech_to_text(audio_bytes):
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     params = {"task": "translate", "language": "ta"} 
-    response = requests.post(HF_STT_URL, headers=headers, data=audio_bytes, params=params)
+    
+    # 💡 முக்கிய திருத்தம்: மொபைல் ஆடியோவை ஒரு தற்காலிக ஃபைலாகச் சேமித்து அனுப்புதல்
+    temp_filename = "temp_recording.wav"
+    with open(temp_filename, "wb") as f:
+        f.write(audio_bytes)
+        
+    with open(temp_filename, "rb") as audio_file:
+        audio_data = audio_file.read()
+        
+    response = requests.post(HF_STT_URL, headers=headers, data=audio_data, params=params)
+    
+    # தற்காலிக ஃபைலை நீக்குதல்
+    if os.path.exists(temp_filename):
+        os.remove(temp_filename)
+        
     if response.status_code == 200:
         return response.json().get("text", "")
     return None
@@ -55,7 +69,6 @@ async def text_to_speech(text_response, output_path):
     await communicate.save(output_path)
 
 # --- வெப்சைட் இயங்கும் முறை ---
-# புதிய மேம்படுத்தப்பட்ட மைக் ரெக்கார்டர்
 audio_bytes = audio_recorder(text="பேச இங்கே க்ளிக் செய்யவும்", recording_color="#e74c3c", neutral_color="#2ecc71")
 
 if audio_bytes:
@@ -67,7 +80,7 @@ if audio_bytes:
     if transcribed_text:
         st.success(f"🗣️ நீங்கள் பேசியது: {transcribed_text}")
         
-        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கும் செயல்பாடு..."):
+        with st.spinner("🧠 AI ஆசிரியர் பதில் தயாரிக்கிறது..."):
             ai_reply = chat_with_tutor(transcribed_text)
             output_audio_file = "reply.mp3"
             asyncio.run(text_to_speech(ai_reply, output_audio_file))
